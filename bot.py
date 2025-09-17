@@ -7,14 +7,14 @@ from alpaca_trade_api import REST, TimeFrame
 import config
 
 # Import RL agent
-from rl_agent import QLearningAgent
+from rl_agent import PPOAgent
 
 # Set up logging
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class AlpacaTradingBot:
-    def backtest(self, days=30):
+    def backtest(self, days=60):
         """Backtest RL agent on historical data."""
         logger.info(f"Starting backtest for {days} days...")
         data = self.get_historical_data(self.symbol, days=days)
@@ -92,21 +92,11 @@ class AlpacaTradingBot:
         self.cash = 0
         self.entry_price = None  # Track entry price for reward calculation
         # RL agent: state = [short_ma, long_ma, position, momentum, rsi, volatility, time_of_day], actions = [hold, buy, sell]
-        self.agent = QLearningAgent(
-            state_size=7,
-            action_size=3,
-            alpha=config.QL_ALPHA,
-            gamma=config.QL_GAMMA,
-            epsilon=config.QL_EPSILON,
-            epsilon_min=config.QL_EPSILON_MIN,
-            epsilon_decay=config.QL_EPSILON_DECAY,
-            replay_capacity=config.QL_REPLAY_CAPACITY,
-            batch_size=config.QL_BATCH_SIZE
-        )
+        self.agent = PPOAgent(state_size=10, action_size=3, alpha=config.QL_ALPHA, gamma=config.QL_GAMMA, model_path='ppo_agent.zip', replay_capacity=config.QL_REPLAY_CAPACITY, batch_size=config.QL_BATCH_SIZE)
         self.action_map = {0: 'hold', 1: 'buy', 2: 'sell'}
         logger.info("Trading bot initialized")
 
-    def get_historical_data(self, symbol, days=30):
+    def get_historical_data(self, symbol, days=200):
         """Fetch historical market data"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
@@ -115,8 +105,8 @@ class AlpacaTradingBot:
             bars = self.api.get_bars(
                 symbol,
                 TimeFrame.Minute,
-                start=start_date.isoformat(),
-                end=end_date.isoformat(),
+                start=start_date.isoformat() + 'Z',
+                end=end_date.isoformat() + 'Z',
                 limit=1000
             ).df
 
@@ -183,7 +173,7 @@ class AlpacaTradingBot:
 
     def trading_strategy(self):
         """RL-based trading strategy with expanded state"""
-        data = self.get_historical_data(self.symbol, days=1)
+        data = self.get_historical_data(self.symbol, days=200)
         if data.empty:
             return
 
